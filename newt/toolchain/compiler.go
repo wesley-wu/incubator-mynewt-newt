@@ -820,9 +820,9 @@ func (c *Compiler) CompileBinaryCmd(dstFile string, options map[string]bool,
 	}
 	//cmd = append(cmd, c.cflagsStrings()...)
 
-	if elfLib != "" {
-		cmd = append(cmd, "-Wl,--just-symbols="+elfLib)
-	}
+	//if elfLib != "" {
+	//	cmd = append(cmd, "-Wl,--just-symbols="+elfLib)
+	//}
 
 	//if keepSymbols != nil {
 	//	for _, name := range keepSymbols {
@@ -840,9 +840,11 @@ func (c *Compiler) CompileBinaryCmd(dstFile string, options map[string]bool,
 		cmd = append(cmd, ls)
 	}
 
-	//if options["mapFile"] {
-	//	cmd = append(cmd, "-Wl,-Map="+dstFile+".map")
-	//}
+	if options["mapFile"] {
+		cmd = append(cmd, "--map")
+		cmd = append(cmd, "--list="+dstFile+".map")
+	}
+
 	/* armcc */
 	for _, obj := range objList {
 		cmd = append(cmd, obj + "(*.o)")
@@ -907,16 +909,9 @@ func (c *Compiler) generateExtras(elfFilename string,
 		binFile := elfFilename + ".bin"
 		cmd := []string{
 			c.ocPath,
-			"-R",
-			".bss",
-			"-R",
-			".bss.core",
-			"-R",
-			".bss.core.nz",
-			"-O",
-			"binary",
+			"--bin",
+			"--output=" + binFile,
 			elfFilename,
-			binFile,
 		}
 		_, err := util.ShellCommand(cmd, nil)
 		if err != nil {
@@ -926,6 +921,18 @@ func (c *Compiler) generateExtras(elfFilename string,
 
 	if options["listFile"] {
 		listFile := elfFilename + ".lst"
+		cmd := []string {
+			c.ocPath,
+			"--text",
+			"-c",
+			"--output=" + listFile,
+			elfFilename,
+		}
+		_, err := util.ShellCommand(cmd, nil)
+		if err != nil {
+			return err
+		}
+		/*
 		f, err := os.OpenFile(listFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
 			0666)
 		if err != nil {
@@ -977,6 +984,7 @@ func (c *Compiler) generateExtras(elfFilename string,
 		if _, err := f.Write(o); err != nil {
 			return util.NewNewtError(err.Error())
 		}
+		*/
 	}
 
 	return nil
