@@ -199,6 +199,9 @@ func (target *Target) App() *pkg.LocalPackage {
 }
 
 func (target *Target) Loader() *pkg.LocalPackage {
+	if target.LoaderName == "" {
+		return nil
+	}
 	return target.resolvePackageName(target.LoaderName)
 }
 

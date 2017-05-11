@@ -431,7 +431,7 @@ func (tracker *DepTracker) RomElfBuildRequired(dstFile string, elfFile string,
 //       target file.
 func (tracker *DepTracker) CopyRequired(srcFile string) (bool, error) {
 
-	tgtFile := tracker.compiler.DstDir() + "/" + filepath.Base(srcFile)
+	tgtFile := tracker.compiler.DstDir() + "/" + strings.TrimSuffix(filepath.Base(srcFile), filepath.Ext(srcFile)) + ".a"
 
 	// If the target doesn't exist or is older than source file, a copy
 	// is required.

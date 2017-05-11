@@ -72,6 +72,7 @@ type Compiler struct {
 	ccPath                string
 	cppPath               string
 	asPath                string
+	ldPath                string
 	arPath                string
 	odPath                string
 	osPath                string
@@ -243,6 +244,7 @@ func (c *Compiler) load(compilerDir string, buildProfile string) error {
 	c.ccPath = newtutil.GetStringFeatures(v, features, "compiler.path.cc")
 	c.cppPath = newtutil.GetStringFeatures(v, features, "compiler.path.cpp")
 	c.asPath = newtutil.GetStringFeatures(v, features, "compiler.path.as")
+	c.ldPath = newtutil.GetStringFeatures(v, features, "compiler.path.ld")
 	c.arPath = newtutil.GetStringFeatures(v, features, "compiler.path.archive")
 	c.odPath = newtutil.GetStringFeatures(v, features, "compiler.path.objdump")
 	c.osPath = newtutil.GetStringFeatures(v, features, "compiler.path.objsize")
@@ -389,7 +391,7 @@ func (c *Compiler) CompileFileCmd(file string, compilerType int) (
 		// Include both the compiler flags and the assembler flags.
 		// XXX: This is not great.  We don't have a way of specifying compiler
 		// flags without also passing them to the assembler.
-		flags = append(c.cflagsStrings(), c.aflagsStrings()...)
+		flags = c.aflagsStrings()
 	case COMPILER_TYPE_CPP:
 		cmdName = c.cppPath
 		flags = c.cflagsStrings()
@@ -400,13 +402,23 @@ func (c *Compiler) CompileFileCmd(file string, compilerType int) (
 	srcPath := strings.TrimPrefix(file, c.baseDir+"/")
 	cmd := []string{cmdName}
 	cmd = append(cmd, flags...)
-	cmd = append(cmd, c.includesStrings()...)
-	cmd = append(cmd, []string{
-		"-c",
-		"-o",
-		objPath,
-		srcPath,
-	}...)
+	if compilerType == COMPILER_TYPE_ASM {
+		cmd = append(cmd, []string{
+			"--pd",
+			"__MICROLIB SETA 1",
+			"-o",
+			objPath,
+			srcPath,
+		}...)
+	} else {
+		cmd = append(cmd, c.includesStrings()...)
+		cmd = append(cmd, []string{
+			"-c",
+			"-o",
+			objPath,
+			srcPath,
+		}...)
+	}	
 
 	return cmd, nil
 }
@@ -425,7 +437,7 @@ func (c *Compiler) GenDepsForFile(file string) error {
 	cmd := []string{c.ccPath}
 	cmd = append(cmd, c.cflagsStrings()...)
 	cmd = append(cmd, c.includesStrings()...)
-	cmd = append(cmd, []string{"-MM", "-MG", srcPath}...)
+	cmd = append(cmd, []string{"-c", "--mm", srcPath}...)
 
 	o, err := util.ShellCommandLimitDbgOutput(cmd, nil, 0)
 	if err != nil {
@@ -555,7 +567,7 @@ func compilerTypeToExts(compilerType int) ([]string, error) {
 	case COMPILER_TYPE_CPP:
 		return []string{"cc", "cpp", "cxx"}, nil
 	case COMPILER_TYPE_ARCHIVE:
-		return []string{"a"}, nil
+		return []string{"a", "lib"}, nil
 	default:
 		return nil, util.NewNewtError("Wrong compiler type specified to " +
 			"compilerTypeToExts")
@@ -657,7 +669,7 @@ func (c *Compiler) CopyArchive(filename string) error {
 		return nil
 	}
 
-	tgtFile := c.dstDir + "/" + filepath.Base(filename)
+	tgtFile := c.dstDir + "/" + strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)) + ".a"
 	copyRequired, err := c.depTracker.CopyRequired(filename)
 	if err != nil {
 		return err
@@ -803,29 +815,20 @@ func (c *Compiler) CompileBinaryCmd(dstFile string, options map[string]bool,
 	objList := c.getObjFiles(util.UniqueStrings(objFiles))
 
 	cmd := []string{
-		c.ccPath,
-		"-o",
-		dstFile,
+		c.ldPath,
+		"--output=" + dstFile,
 	}
-	cmd = append(cmd, c.cflagsStrings()...)
+	//cmd = append(cmd, c.cflagsStrings()...)
 
 	if elfLib != "" {
 		cmd = append(cmd, "-Wl,--just-symbols="+elfLib)
 	}
 
-	if c.ldResolveCircularDeps {
-		cmd = append(cmd, "-Wl,--start-group")
-		cmd = append(cmd, objList...)
-		cmd = append(cmd, "-Wl,--end-group")
-	} else {
-		cmd = append(cmd, objList...)
-	}
-
-	if keepSymbols != nil {
-		for _, name := range keepSymbols {
-			cmd = append(cmd, "-Wl,--undefined="+name)
-		}
-	}
+	//if keepSymbols != nil {
+	//	for _, name := range keepSymbols {
+	//		cmd = append(cmd, "-Wl,--undefined="+name)
+	//	}
+	//}
 
 	cmd = append(cmd, c.lflagsStrings()...)
 
@@ -833,12 +836,19 @@ func (c *Compiler) CompileBinaryCmd(dstFile string, options map[string]bool,
 	//cmd += " -Wl,--warn-common "
 
 	for _, ls := range c.LinkerScripts {
-		cmd = append(cmd, "-T")
+		cmd = append(cmd, "--scatter")
 		cmd = append(cmd, ls)
 	}
-	if options["mapFile"] {
-		cmd = append(cmd, "-Wl,-Map="+dstFile+".map")
+
+	//if options["mapFile"] {
+	//	cmd = append(cmd, "-Wl,-Map="+dstFile+".map")
+	//}
+	/* armcc */
+	for _, obj := range objList {
+		cmd = append(cmd, obj + "(*.o)")
 	}
+
+	//cmd = append(cmd, objs...)
 
 	return cmd
 }
@@ -1070,7 +1080,7 @@ func (c *Compiler) CompileArchiveCmd(archiveFile string,
 
 	cmd := []string{
 		c.arPath,
-		"rcs",
+		"--create",
 		archiveFile,
 	}
 	cmd = append(cmd, c.getObjFiles(objFiles)...)

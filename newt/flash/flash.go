@@ -351,10 +351,11 @@ func sizeComment(size int) string {
 func (area FlashArea) writeSrc(w io.Writer) {
 	fmt.Fprintf(w, "    /* %s */\n", area.Name)
 	fmt.Fprintf(w, "    {\n")
-	fmt.Fprintf(w, "        .fa_id = %d,\n", area.Id)
-	fmt.Fprintf(w, "        .fa_device_id = %d,\n", area.Device)
-	fmt.Fprintf(w, "        .fa_off = 0x%08x,\n", area.Offset)
-	fmt.Fprintf(w, "        .fa_size = %d,%s\n", area.Size,
+	fmt.Fprintf(w, "        %d, /* fa_id */\n", area.Id)
+	fmt.Fprintf(w, "        %d, /* fa_device_id */\n", area.Device)
+	fmt.Fprintf(w, "        0,  /* pad16 */\n")
+	fmt.Fprintf(w, "        0x%08x, /* fa_off */\n", area.Offset)
+	fmt.Fprintf(w, "        %d, /* fa_size */ %s\n", area.Size,
 		sizeComment(area.Size))
 	fmt.Fprintf(w, "    },\n")
 }
